@@ -2,6 +2,7 @@
 % "stop" - Simulation is stopped
 % "start" - Simulation is playing
 % "initialization" - Initializes the simulation
+% "clear"
 function gol3D(action)
 width = 0.5;
 length = 11;
