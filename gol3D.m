@@ -1,21 +1,43 @@
 % action:
-% "stop" - Simulation is stopped
-% "start" - Simulation is playing
+% "stop" - Stops the simulation and updates its rules
+% "start" - Starts the simulation
+% "step" - Advances the simulation by one step
 % "initialization" - Initializes the simulation (plot, cells, ui controls)
 % "reset" - Resets the simulation (clears the cells array and clears the plot)
 function gol3D(action)
 if nargin<1
     action = "initialization";
 end
-% Width of the voxels
-width = 0.5;
+% Radius of the voxels
+radius = 0.5;
 % The simulated space's dimension (length x length x length cube)
 length = 11;
 if strcmp(action,"initialization") | strcmp(action,"reset")
+    neighborhood = 0;
+    survival = [];
+    birth = [];
+    % Rules - (survival, birth, neighborhood)
+    % Neighborhood values:
+    % 1 - von Neumann neighborhood (6 cells checked)
+    % 2 - radial neighborhood (18 cells checked)
+    % 3 - Moore neighborhood (26 cells checked)
+    if strcmp(action,"initialization")
+        % Default rules
+        neighborhood = 3;
+        survival = [ 4 ];
+        birth = [ 3 4 ];
+    elseif neighborhood == 0 && isempty(survival) && isempty(birth)
+        % Reset
+        neighborhood = gcf().UserData.Neighborhood;
+        survival = gcf().UserData.Survival;
+        birth = gcf().UserData.Birth;
+    end
     % The initialized center's width
-    centerwidth = 1; %length/4;
-    % The initialized
-    initvalue = 1; %randi([0 1]);
+    % max is length/2
+    centerwidth = 1;
+    % The initialized value that is used to fill the specified center width
+    initvalue = 1;
+    %initvalue = randi([0 1]); % - for randomized cells
     cells = zeros( length, length, length );
     for i = -round( centerwidth ):round( centerwidth )
         for j = -round( centerwidth ):round( centerwidth )
@@ -26,7 +48,7 @@ if strcmp(action,"initialization") | strcmp(action,"reset")
     end
     color = jet( length );
     if strcmp(action,"initialization")
-        figure( "Name", "3D Game of Life" );
+        figure( "Name", "3D Game of Life", "CloseRequestFcn", @closeSim );
         % Initializes the 3D plot
         axis equal ;
         xlabel( 'X-axis' );
@@ -49,16 +71,17 @@ if strcmp(action,"initialization") | strcmp(action,"reset")
     ctrlRelPos=1;
     yPos=0.90-(ctrlRelPos-1)*(btnWid+spacing);
     labelStr='Start';
-    callback=@StartSim;
+    callback=@startSim;
 
     % Generic button information
     ctrlPos=[xPos yPos-spacing btnLen btnWid];
     startHndl=uicontrol( ...
         'Style','pushbutton', ...
-        'BackgroundColor','black', ...
+        'BackgroundColor',[0.23 0.23 0.25 1], ...
         'ForegroundColor','white', ...
         'Units','normalized', ...
         'Position',ctrlPos, ...
+        'Tooltip', sprintf("Starts/stops the simulation."),...
         'String',labelStr, ...
         'Interruptible','on', ...
         'Callback',callback);
@@ -67,25 +90,44 @@ if strcmp(action,"initialization") | strcmp(action,"reset")
     ctrlRelPos=2;
     yPos=0.90-(ctrlRelPos-1)*(btnWid+spacing);
     labelStr='Reset';
-    callback=@ResetSim;
+    callback=@resetSim;
 
     % Generic button information
     ctrlPos=[xPos yPos-spacing btnLen btnWid];
     resetHndl=uicontrol( ...
         'Style','pushbutton', ...
-        'BackgroundColor','black', ...
+        'BackgroundColor',[0.23 0.23 0.25 1], ...
+        'ForegroundColor','white', ...
+        'Units','normalized', ...
+        'Position',ctrlPos, ...
+        'Tooltip', sprintf("Resets the simulation to its initial condition - keeps the rules."),...
+        'String',labelStr, ...
+        'Interruptible','on', ...
+        'Callback',callback);
+    %==========================================================================
+    % The STEP button
+    ctrlRelPos=3;
+    yPos=0.90-(ctrlRelPos-1)*(btnWid+spacing);
+    labelStr='Step';
+    callback=@stepSim;
+
+    % Generic button information
+    ctrlPos=[xPos yPos-spacing btnLen btnWid];
+    stepHndl=uicontrol( ...
+        'Style','pushbutton', ...
+        'BackgroundColor',[0.23 0.23 0.25 1], ...
         'ForegroundColor','white', ...
         'Units','normalized', ...
         'Position',ctrlPos, ...
         'String',labelStr, ...
+        'Tooltip', sprintf("Advances the simulation by 1 generation."),...
         'Interruptible','on', ...
         'Callback',callback);
     %==========================================================================
     % The SURVIVAL text label
-    ctrlRelPos=3;
-    yPos=0.90-(ctrlRelPos-1)*(btnWid+(spacing/3));
+    ctrlRelPos=4.5;
+    yPos=0.90-(ctrlRelPos-1)*(btnWid+(spacing/12));
     labelStr='Survival rule:';
-    callback=@ResetSim;
 
     % Generic button information
     ctrlPos=[xPos yPos-spacing btnLen btnWid/3];
@@ -98,38 +140,35 @@ if strcmp(action,"initialization") | strcmp(action,"reset")
         'HorizontalAlignment','left', ...
         'Units','normalized', ...
         'Position', ctrlPos, ...
+        'Tooltip', sprintf("This ruleset specifies the number of live\nneighboring cells that the checked cell \nneeds to have to survive the next generation.\nFew examples:\n '4 5' - the cell needs 4 or 5 alive neighbours to survive"),...
         'String',labelStr, ...
-        'Interruptible','on', ...
-        'Callback',callback);
+        'Interruptible','on');
     %==========================================================================
     % The SURVIVAL text field
-    ctrlRelPos=4;
-    yPos=0.90-(ctrlRelPos-1)*((0.875*btnWid)+(spacing/12));
-    labelStr='4';
-    callback=@ResetSim;
+    ctrlRelPos=4.85;
+    yPos=0.90-(ctrlRelPos-1)*(btnWid+(spacing/12));
+    labelStr=num2str(survival);
 
     % Generic button information
     ctrlPos=[xPos yPos-spacing btnLen btnWid/3];
     survivalHndl=uicontrol( ...
         'Style','edit', ...
-        'BackgroundColor','black', ...
+        'BackgroundColor',[0.23 0.23 0.25 1], ...
         'ForegroundColor','white', ...
         'HorizontalAlignment','left', ...
         'Units','normalized', ...
         'Position', ctrlPos, ...
         'String',labelStr, ...
-        'Interruptible','on', ...
-        'Callback',callback);
+        'Interruptible','on');
     %==========================================================================
     % The BIRTH text label
-    ctrlRelPos=5;
-    yPos=0.90-(ctrlRelPos-1)*(btnWid+(spacing/3));
+    ctrlRelPos=5.5;
+    yPos=0.90-(ctrlRelPos-1)*(btnWid+(spacing/12));
     labelStr='Birth rule:';
-    callback=@ResetSim;
 
     % Generic button information
-    ctrlPos=[xPos yPos+spacing btnLen btnWid/3];
-    survivaltxtHndl=uicontrol( ...
+    ctrlPos=[xPos yPos-spacing btnLen btnWid/3];
+    birthtxtHndl=uicontrol( ...
         'Style','text', ...
         'BackgroundColor',[0.9, 0.9, 0.9, 1], ...
         'ForegroundColor','black', ...
@@ -138,38 +177,35 @@ if strcmp(action,"initialization") | strcmp(action,"reset")
         'HorizontalAlignment','left', ...
         'Units','normalized', ...
         'Position', ctrlPos, ...
+        'Tooltip', sprintf("This ruleset specifies the number of live\nneighboring cells that the checked cell \nneeds to have to become alive.\nFew examples:\n '3 4' - the cell needs 3 or 4 alive neighbours to become a live cell"), ...
         'String',labelStr, ...
-        'Interruptible','on', ...
-        'Callback',callback);
+        'Interruptible','on');
     %==========================================================================
     % The BIRTH text field
-    ctrlRelPos=6;
-    yPos=0.90-(ctrlRelPos-1)*((0.975*btnWid)+(spacing/12));
-    labelStr='3,4';
-    callback=@ResetSim;
+    ctrlRelPos=5.85;
+    yPos=0.90-(ctrlRelPos-1)*(btnWid+(spacing/12));
+    labelStr=num2str(birth);
 
     % Generic button information
-    ctrlPos=[xPos yPos+spacing btnLen btnWid/3];
-    survivalHndl=uicontrol( ...
+    ctrlPos=[xPos yPos-spacing btnLen btnWid/3];
+    birthHndl=uicontrol( ...
         'Style','edit', ...
-        'BackgroundColor','black', ...
+        'BackgroundColor',[0.23 0.23 0.25 1], ...
         'ForegroundColor','white', ...
         'HorizontalAlignment','left', ...
         'Units','normalized', ...
         'Position', ctrlPos, ...
         'String',labelStr, ...
-        'Interruptible','on', ...
-        'Callback',callback);
+        'Interruptible','on');
     %==========================================================================
     % The NEIGHBORHOOD text label
-    ctrlRelPos=6.15;
-    yPos=0.90-(ctrlRelPos-1)*(btnWid+(spacing/3));
-    labelStr='Neighborhood rule:';
-    callback=@ResetSim;
+    ctrlRelPos=6.5;
+    yPos=0.90-(ctrlRelPos-1)*(btnWid+(spacing/12));
+    labelStr='Neighborhood:';
 
     % Generic button information
-    ctrlPos=[xPos yPos+spacing btnLen btnWid/3];
-    survivaltxtHndl=uicontrol( ...
+    ctrlPos=[xPos yPos-spacing btnLen btnWid/3];
+    neighborhoodtxtHndl=uicontrol( ...
         'Style','text', ...
         'BackgroundColor',[0.9, 0.9, 0.9, 1], ...
         'ForegroundColor','black', ...
@@ -178,21 +214,20 @@ if strcmp(action,"initialization") | strcmp(action,"reset")
         'HorizontalAlignment','left', ...
         'Units','normalized', ...
         'Position', ctrlPos, ...
+        'Tooltip', sprintf("This is the shape of the checked neighborhood:\nvon Neumann - 6 cells\nradial - 18 cells\nMoore - 26 cells"), ...
         'String',labelStr, ...
-        'Interruptible','on', ...
-        'Callback',callback);
+        'Interruptible','on');
     %==========================================================================
     % The NEIGHBORHOOD popupmenu
-    ctrlRelPos=7.35;
-    yPos=0.90-(ctrlRelPos-1)*((0.975*btnWid)+(spacing/12));
+    ctrlRelPos=6.85;
+    yPos=0.90-(ctrlRelPos-1)*(btnWid+(spacing/12));
     neighborhoodStr={'von Neumann','radial','Moore'};
-    callback=@ResetSim;
 
     % Generic button information
-    ctrlPos=[xPos yPos+spacing btnLen btnWid/3];
-    survivalHndl=uicontrol( ...
+    ctrlPos=[xPos yPos-spacing btnLen btnWid/3];
+    neighborhoodHndl=uicontrol( ...
         'Style','popupmenu', ...
-        'BackgroundColor','black', ...
+        'BackgroundColor',[0.23 0.23 0.25 1], ...
         'ForegroundColor','white', ...
         'FontUnits','normalized', ...
         'FontSize', 0.5,...
@@ -200,20 +235,20 @@ if strcmp(action,"initialization") | strcmp(action,"reset")
         'Units','normalized', ...
         'Position', ctrlPos, ...
         'String',neighborhoodStr, ...
-        'Interruptible','on', ...
-        'Callback',callback);
+        'Value',neighborhood,...
+        'Interruptible','on');
     %==========================================================================
     % The APPLY button
-    ctrlRelPos=5.5;
+    ctrlRelPos=6;
     yPos=0.90-(ctrlRelPos-1)*(btnWid+spacing);
     labelStr='Apply rules';
-    callback=@ResetSim;
+    callback=@(src, event)applyRules(src, event, survivalHndl.String, birthHndl.String, neighborhoodHndl.Value );
 
     % Generic button information
     ctrlPos=[xPos yPos-spacing btnLen btnWid];
-    resetHndl=uicontrol( ...
+    applyHndl=uicontrol( ...
         'Style','pushbutton', ...
-        'BackgroundColor','black', ...
+        'BackgroundColor',[0.23 0.23 0.25 1], ...
         'ForegroundColor','white', ...
         'Units','normalized', ...
         'Position',ctrlPos, ...
@@ -224,26 +259,25 @@ if strcmp(action,"initialization") | strcmp(action,"reset")
     % Exporting data to guidata
     data.isStarted = 0;
     data.cells = cells;
+    if strcmp(action,"initialization")
+        set(gcf, "UserData", struct('Survival', num2str(survival),'SurvivalRule', survival, 'Birth', num2str(birth), 'BirthRule', birth, 'Neighborhood', neighborhood));
+    end
     data.color = color;
     data.startHndl = startHndl;
     guidata(gcf, data);
 end
 data = guidata(gcf);
 cells = data.cells;
+survival = gcf().UserData.SurvivalRule;
+birth = gcf().UserData.BirthRule;
+neighborhood = gcf().UserData.Neighborhood;
 color = data.color;
 cell_voxels = zeros( length, length, length );
-% 0 - Moore neighborhood (6 cells checked)
-% 1 - radial neighborhood
-% 2 - von Neumann neighborhood
-neighborhood = 2;
-% Rules
-survival = [ 3 4 5 6 7 8 ];
-birth = [ 4 6 8 9 10 ];
 cla(gcf);
 for i = 1:size( cells, 1 )
     for j = 1:size( cells, 2 )
         for k = 1:size( cells, 3 )
-            [x,y,z] = cube( i, j, k, width); %0.5 - (k * 0.01) );
+            [x,y,z] = cube( i, j, k, radius);
             hold on ;
             cell_voxels( i, j, k ) = surface( x, y, z, 'FaceColor', color( k, : ) );
             hold off ;
@@ -263,9 +297,10 @@ for i = 1:size( cells, 1 )
         end
     end
 end
-if strcmp(action,"start")
+if strcmp(action,"start") | strcmp(action,"step")
     set(data.startHndl, "String", "Stop");
-    set(data.startHndl, "Callback", @StopSim);
+    set(data.startHndl, "Callback", @stopSim);
+    try
     while data.isStarted == 1
         new_cells = zeros( length, length, length );
         for i = 1:size( cells, 1 )
@@ -274,36 +309,39 @@ if strcmp(action,"start")
                     % Update the cells based on the Game of Life rules (scaled up to 3D)
                     neighbours = 0;
                     if (neighborhood>=0)
-                        neighbours = neighbours + get( cells, i + 1, j, k, 0 );
-                        neighbours = neighbours + get( cells, i - 1, j, k, 0 );
-                        neighbours = neighbours + get( cells, i, j + 1, k, 0 );
-                        neighbours = neighbours + get( cells, i, j - 1, k, 0 );
-                        neighbours = neighbours + get( cells, i, j, k + 1, 0 );
-                        neighbours = neighbours + get( cells, i, j, k - 1, 0 );
+                        % Von Neumann neighborhood check
+                        neighbours = neighbours + getValue( cells, i + 1, j, k, 0 );
+                        neighbours = neighbours + getValue( cells, i - 1, j, k, 0 );
+                        neighbours = neighbours + getValue( cells, i, j + 1, k, 0 );
+                        neighbours = neighbours + getValue( cells, i, j - 1, k, 0 );
+                        neighbours = neighbours + getValue( cells, i, j, k + 1, 0 );
+                        neighbours = neighbours + getValue( cells, i, j, k - 1, 0 );
                     end
                     if (neighborhood>=1)
-                        neighbours = neighbours + get( cells, i + 1, j + 1, k, 0 );
-                        neighbours = neighbours + get( cells, i - 1, j + 1, k, 0 );
-                        neighbours = neighbours + get( cells, i + 1, j - 1, k, 0 );
-                        neighbours = neighbours + get( cells, i - 1, j - 1, k, 0 );
-                        neighbours = neighbours + get( cells, i, j + 1, k + 1, 0 );
-                        neighbours = neighbours + get( cells, i, j - 1, k + 1, 0 );
-                        neighbours = neighbours + get( cells, i, j + 1, k - 1, 0 );
-                        neighbours = neighbours + get( cells, i, j - 1, k - 1, 0 );
-                        neighbours = neighbours + get( cells, i + 1, j, k + 1, 0 );
-                        neighbours = neighbours + get( cells, i + 1, j, k - 1, 0 );
-                        neighbours = neighbours + get( cells, i - 1, j, k + 1, 0 );
-                        neighbours = neighbours + get( cells, i - 1, j, k - 1, 0 );
+                        % Radial neighborhood check
+                        neighbours = neighbours + getValue( cells, i + 1, j + 1, k, 0 );
+                        neighbours = neighbours + getValue( cells, i - 1, j + 1, k, 0 );
+                        neighbours = neighbours + getValue( cells, i + 1, j - 1, k, 0 );
+                        neighbours = neighbours + getValue( cells, i - 1, j - 1, k, 0 );
+                        neighbours = neighbours + getValue( cells, i, j + 1, k + 1, 0 );
+                        neighbours = neighbours + getValue( cells, i, j - 1, k + 1, 0 );
+                        neighbours = neighbours + getValue( cells, i, j + 1, k - 1, 0 );
+                        neighbours = neighbours + getValue( cells, i, j - 1, k - 1, 0 );
+                        neighbours = neighbours + getValue( cells, i + 1, j, k + 1, 0 );
+                        neighbours = neighbours + getValue( cells, i + 1, j, k - 1, 0 );
+                        neighbours = neighbours + getValue( cells, i - 1, j, k + 1, 0 );
+                        neighbours = neighbours + getValue( cells, i - 1, j, k - 1, 0 );
                     end
                     if (neighborhood>=2)
-                        neighbours = neighbours + get( cells, i + 1, j + 1, k + 1, 0 );
-                        neighbours = neighbours + get( cells, i + 1, j + 1, k - 1, 0 );
-                        neighbours = neighbours + get( cells, i + 1, j - 1, k + 1, 0 );
-                        neighbours = neighbours + get( cells, i + 1, j - 1, k - 1, 0 );
-                        neighbours = neighbours + get( cells, i - 1, j + 1, k + 1, 0 );
-                        neighbours = neighbours + get( cells, i - 1, j + 1, k - 1, 0 );
-                        neighbours = neighbours + get( cells, i - 1, j - 1, k + 1, 0 );
-                        neighbours = neighbours + get( cells, i - 1, j - 1, k - 1, 0 );
+                        % Moore neighborhood check
+                        neighbours = neighbours + getValue( cells, i + 1, j + 1, k + 1, 0 );
+                        neighbours = neighbours + getValue( cells, i + 1, j + 1, k - 1, 0 );
+                        neighbours = neighbours + getValue( cells, i + 1, j - 1, k + 1, 0 );
+                        neighbours = neighbours + getValue( cells, i + 1, j - 1, k - 1, 0 );
+                        neighbours = neighbours + getValue( cells, i - 1, j + 1, k + 1, 0 );
+                        neighbours = neighbours + getValue( cells, i - 1, j + 1, k - 1, 0 );
+                        neighbours = neighbours + getValue( cells, i - 1, j - 1, k + 1, 0 );
+                        neighbours = neighbours + getValue( cells, i - 1, j - 1, k - 1, 0 );
                     end
                     new_cells(i,j,k) = 0; % Cell dies
                     for s = 1:size( survival, 2 )
@@ -335,32 +373,37 @@ if strcmp(action,"start")
             end
         end
         drawnow
-        % For exporting the figure frames into gifs
-        %exportgraphics(fig, 'S3-8B468-10M.gif', "Append", true);
-        %pause( 0.01 );
+        if strcmp(action,"step")
+            stopSim(gcf);
+        end
         data = guidata(gcf);
         % Exporting data to guidata
         data.cells = cells;
         guidata(gcf, data);
     end
+    catch
+        return;
+    end
     return;
 end
-if strcmp(action,"stop")
+if strcmp(action,"stop") | strcmp(action,"close")
     set(data.startHndl, "String", "Start");
-    set(data.startHndl, "Callback", @StartSim);
+    set(data.startHndl, "Callback", @startSim);
     return;
 end
 end
 
-% Cube points that needs to be drawn
-function [x,y,z] = cube(posx,posy,posz,width)
-x = [ posx + width, posx + width, posx + width, posx + width, posx + width; posx + width, posx + width, posx - width, posx - width, posx + width; posx + width, posx + width, posx - width, posx - width, posx + width; posx + width, posx + width, posx + width, posx + width, posx + width ];
-y = [ posy + width, posy - width, posy - width, posy + width, posy + width; posy + width, posy - width, posy - width, posy + width, posy + width; posy + width, posy - width, posy - width, posy + width, posy + width; posy + width, posy - width, posy - width, posy + width, posy + width ];
-z = [ posz - width, posz - width, posz - width, posz - width, posz - width; posz - width, posz - width, posz - width, posz - width, posz - width; posz + width, posz + width, posz + width, posz + width, posz + width; posz + width, posz + width, posz + width, posz + width, posz + width ];
+% Cube vertices that needs to be drawn
+% The cube's center is on the [posX, posY, posZ] point and the other points
+% are drawn by the value of the width apart
+function [x,y,z] = cube(posX,posY,posZ,width)
+x = [ posX + width, posX + width, posX + width, posX + width, posX + width; posX + width, posX + width, posX - width, posX - width, posX + width; posX + width, posX + width, posX - width, posX - width, posX + width; posX + width, posX + width, posX + width, posX + width, posX + width ];
+y = [ posY + width, posY - width, posY - width, posY + width, posY + width; posY + width, posY - width, posY - width, posY + width, posY + width; posY + width, posY - width, posY - width, posY + width, posY + width; posY + width, posY - width, posY - width, posY + width, posY + width ];
+z = [ posZ - width, posZ - width, posZ - width, posZ - width, posZ - width; posZ - width, posZ - width, posZ - width, posZ - width, posZ - width; posZ + width, posZ + width, posZ + width, posZ + width, posZ + width; posZ + width, posZ + width, posZ + width, posZ + width, posZ + width ];
 end
 
 % "Safe" array indexing
-function value = get(array,x,y,z,default_val)
+function value = getValue(array,x,y,z,default_val)
 try
     value = array( x, y, z );
 catch
@@ -368,23 +411,55 @@ catch
 end
 end
 
-function StartSim(src,event)
+function startSim(src, ~)
 data = guidata(gcf);
 data.isStarted = 1;
 guidata(src,data);
 gol3D("start");
 end
 
-function StopSim(src,event)
+function stepSim(src, ~)
+data = guidata(gcf);
+data.isStarted = 1;
+guidata(src,data);
+gol3D("step");
+end
+
+function stopSim(src, ~)
 data = guidata(gcf);
 data.isStarted = 0;
 guidata(src,data);
 gol3D("stop");
 end
 
-function ResetSim(src,event)
+function closeSim(src, ~)
+data = guidata(gcf);
+data.isStarted = 0;
+guidata(src,data);
+gol3D("stop");
+delete(src);
+end
+
+function resetSim(src, ~)
 data = guidata(gcf);
 data.isStarted = 0;
 guidata(src,data);
 gol3D("reset");
+uialert(gcf, "The simulation has been reset!", "Simulation reset", "Modal",true, "Icon", "success");
+end
+
+function applyRules(src, event, survival, birth, neighborhood)
+stopSim(src);
+survivalrule = str2num(survival, "Evaluation", "restricted");
+if isempty(survivalrule)
+    uialert(gcf, ["The survival rule is invalid!", "Valid rule example: 1 2 4"], "Rule error", "Modal",true, "Icon", "error");
+    return;
+end
+birthrule = str2num(birth, "Evaluation", "restricted");
+if isempty(birthrule)
+    uialert(gcf, ['The birth rule is invalid!', 'Valid rule example: 2 4'], "Rule error", "Modal",true, "Icon", "error");
+    return;
+end
+set(gcf, "UserData", struct('Survival', survival,'SurvivalRule', survivalrule, 'Birth', birth, 'BirthRule', birthrule, 'Neighborhood', neighborhood));
+uialert(gcf, 'The survival and birth rule has been set.', "Rule is set", "Modal",true, "Icon", "success");
 end
