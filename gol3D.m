@@ -308,7 +308,7 @@ if strcmp(action,"start") | strcmp(action,"step")
                 for k = 1:size( cells, 3 )
                     % Update the cells based on the Game of Life rules (scaled up to 3D)
                     neighbours = 0;
-                    if (neighborhood>=0)
+                    if (neighborhood>=1)
                         % Von Neumann neighborhood check
                         neighbours = neighbours + getValue( cells, i + 1, j, k, 0 );
                         neighbours = neighbours + getValue( cells, i - 1, j, k, 0 );
@@ -317,7 +317,7 @@ if strcmp(action,"start") | strcmp(action,"step")
                         neighbours = neighbours + getValue( cells, i, j, k + 1, 0 );
                         neighbours = neighbours + getValue( cells, i, j, k - 1, 0 );
                     end
-                    if (neighborhood>=1)
+                    if (neighborhood>=2)
                         % Radial neighborhood check
                         neighbours = neighbours + getValue( cells, i + 1, j + 1, k, 0 );
                         neighbours = neighbours + getValue( cells, i - 1, j + 1, k, 0 );
@@ -332,7 +332,7 @@ if strcmp(action,"start") | strcmp(action,"step")
                         neighbours = neighbours + getValue( cells, i - 1, j, k + 1, 0 );
                         neighbours = neighbours + getValue( cells, i - 1, j, k - 1, 0 );
                     end
-                    if (neighborhood>=2)
+                    if (neighborhood>=3)
                         % Moore neighborhood check
                         neighbours = neighbours + getValue( cells, i + 1, j + 1, k + 1, 0 );
                         neighbours = neighbours + getValue( cells, i + 1, j + 1, k - 1, 0 );
